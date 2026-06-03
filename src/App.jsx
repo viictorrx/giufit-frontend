@@ -17,7 +17,8 @@ export default function GiuFitStore() {
   const [view, setView] = useState("loja");
 
   const carregarMenu = () => {
-    fetch("http://localhost:8000/pratos")
+    // Linha atualizada para buscar os dados direto da nuvem no Render!
+    fetch("https://giufit-backend.onrender.com/pratos")
       .then((res) => res.json())
       .then((data) => {
         const cardapioAdaptado = data.map((prato) => ({

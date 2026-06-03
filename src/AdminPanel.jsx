@@ -45,8 +45,8 @@ export default function AdminPanel({ menu, carregarMenu, setView }) {
 
     // Se houver um idEmEdicao, faz PUT para atualizar. Se não, faz POST para criar novo.
     const url = idEmEdicao
-      ? `http://localhost:8000/pratos/${idEmEdicao}`
-      : "http://localhost:8000/pratos";
+      ? `https://giufit-backend.onrender.com/pratos/${idEmEdicao}`
+      : "https://giufit-backend.onrender.com/pratos";
     const method = idEmEdicao ? "PUT" : "POST";
 
     fetch(url, {
@@ -74,7 +74,9 @@ export default function AdminPanel({ menu, carregarMenu, setView }) {
 
   const handleDeletarPrato = (id) => {
     if (confirm("Tem a certeza que deseja eliminar esta marmita?")) {
-      fetch(`http://localhost:8000/pratos/${id}`, { method: "DELETE" })
+      fetch(`https://giufit-backend.onrender.com/pratos/${id}`, {
+        method: "DELETE",
+      })
         .then(() => {
           carregarMenu();
           if (idEmEdicao === id) limparFormulario(); // Cancela a edição se o prato for apagado
