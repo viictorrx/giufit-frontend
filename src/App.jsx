@@ -113,9 +113,11 @@ export default function GiuFitStore() {
           onClick={() => setView("loja")}
           style={{ ...styles.navLogo, cursor: "pointer" }}
         >
-          <span style={styles.logoCircle}>🍽️</span>
-          <span style={styles.logoText}>GiuFit</span>
-          <span style={styles.logoSub}>Marmitas congeladas</span>
+          <img
+            src="/giufitLogo.png"
+            alt="Logo GiuFit"
+            style={{ height: "70px", objectFit: "contain" }}
+          />
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
           {view === "loja" ? (
