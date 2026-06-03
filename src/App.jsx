@@ -114,7 +114,7 @@ export default function GiuFitStore() {
           style={{ ...styles.navLogo, cursor: "pointer" }}
         >
           <img
-            src="/giufitLogo.png"
+            src="/giufitlogoo.png"
             alt="Logo GiuFit"
             style={{ height: "70px", objectFit: "contain" }}
           />
