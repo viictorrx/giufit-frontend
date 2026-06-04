@@ -179,7 +179,7 @@ export default function GiuFitStore() {
               <div style={styles.decoCircle1} />
               <div style={styles.decoCircle2} />
               <div style={styles.decoEmojis}>
-                {["🥦", "🍗", "🥕", "🫙", "🥗", "🍳"].map((e, i) => (
+                {["🥦", "🍗", "🥕", "🍅", "🥗", "🍳"].map((e, i) => (
                   <span
                     key={i}
                     style={{
