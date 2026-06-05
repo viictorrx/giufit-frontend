@@ -34,7 +34,14 @@ export const adminStyles = {
 };
 
 export const styles = {
-  root: { minHeight: "100vh", background: C.cream, color: C.text },
+  root: {
+    minHeight: "100vh",
+    background: C.cream,
+    color: C.text,
+    // 🔥 CORREÇÃO MOBILE: Impede o site de vazar pelas laterais
+    overflowX: "hidden",
+    width: "100%",
+  },
   nav: {
     position: "fixed",
     top: 0,
@@ -44,8 +51,11 @@ export const styles = {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
-    padding: "12px 32px",
+    padding: "12px 20px", // 🔥 Ajustado para ecrãs menores
     transition: "background 0.3s, box-shadow 0.3s",
+    // 🔥 CORREÇÃO MOBILE: Permite que o menu desça de linha se não couber
+    flexWrap: "wrap",
+    gap: "10px",
   },
   navLogo: { display: "flex", alignItems: "center", gap: 8 },
   logoCircle: { fontSize: 28 },
@@ -89,13 +99,20 @@ export const styles = {
     minHeight: "100vh",
     display: "flex",
     alignItems: "center",
-    padding: "100px 32px 60px",
+    justifyContent: "center", // 🔥 Mantém centralizado no telemóvel
+    padding: "120px 20px 60px", // 🔥 Mais espaço no topo caso o nav fique com 2 linhas
     background: `linear-gradient(135deg, ${C.cream} 55%, ${C.creamDark} 100%)`,
     position: "relative",
     overflow: "hidden",
     gap: 40,
+    flexWrap: "wrap", // 🔥 CORREÇÃO MOBILE: Permite a arte descer para baixo do texto
   },
-  heroInner: { flex: 1, maxWidth: 560, animation: "fadeInUp 0.8s ease both" },
+  heroInner: {
+    flex: 1,
+    maxWidth: 560,
+    minWidth: 280,
+    animation: "fadeInUp 0.8s ease both",
+  },
   heroTag: {
     display: "inline-block",
     background: C.pinkLight,
@@ -132,7 +149,7 @@ export const styles = {
     textDecoration: "none",
     boxShadow: "0 6px 24px rgba(74,140,28,0.35)",
   },
-  heroDeco: { flex: 1, position: "relative", minHeight: 300 },
+  heroDeco: { flex: 1, position: "relative", minHeight: 300, minWidth: 280 },
   decoCircle1: {
     position: "absolute",
     width: 260,
@@ -161,7 +178,7 @@ export const styles = {
     display: "flex",
     flexWrap: "wrap",
     gap: 20,
-    padding: "60px 32px",
+    padding: "60px 20px",
     background: C.creamDark,
     justifyContent: "center",
   },
@@ -177,7 +194,7 @@ export const styles = {
   benIco: { fontSize: 36, display: "block", marginBottom: 10 },
   benTitle: { fontSize: 15, color: C.green, display: "block", marginBottom: 6 },
   benDesc: { fontSize: 13, color: C.muted, lineHeight: 1.5 },
-  menu: { padding: "80px 32px", maxWidth: 1200, margin: "0 auto" },
+  menu: { padding: "80px 20px", maxWidth: 1200, margin: "0 auto" },
   menuHeader: { textAlign: "center", marginBottom: 48 },
   menuTitle: {
     fontFamily: "'Playfair Display', serif",
@@ -188,7 +205,8 @@ export const styles = {
   menuSub: { fontSize: 16, color: C.muted },
   grid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))",
+    // 🔥 CORREÇÃO MOBILE: Reduzido de 300px para 280px para caber em telas menores
+    gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
     gap: 28,
   },
   card: {
@@ -212,7 +230,7 @@ export const styles = {
     marginBottom: 8,
   },
   cardDesc: { fontSize: 13, color: C.muted, lineHeight: 1.6, marginBottom: 16 },
-  tamRow: { display: "flex", gap: 8, marginBottom: 20 },
+  tamRow: { display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 20 },
   tamBtn: {
     padding: "6px 14px",
     borderRadius: 20,
@@ -232,6 +250,8 @@ export const styles = {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
+    flexWrap: "wrap",
+    gap: 12,
   },
   preco: {
     fontFamily: "'Playfair Display', serif",
@@ -254,7 +274,7 @@ export const styles = {
     background: C.text,
     color: "#fff",
     textAlign: "center",
-    padding: "48px 32px",
+    padding: "48px 20px",
   },
   footerLogo: {
     fontFamily: "'Playfair Display', serif",
@@ -277,7 +297,8 @@ export const styles = {
     top: 0,
     right: 0,
     bottom: 0,
-    width: 380,
+    width: "100%", // 🔥 CORREÇÃO MOBILE: Ocupa 100% no telemóvel
+    maxWidth: 380, // 🔥 Mas limita a 380px no PC
     background: "#fff",
     zIndex: 201,
     boxShadow: "-8px 0 40px rgba(0,0,0,0.15)",
