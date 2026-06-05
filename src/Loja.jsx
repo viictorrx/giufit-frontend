@@ -435,17 +435,48 @@ export default function Loja({ irParaAdmin }) {
               🌱 Alimentação saudável, prática e saborosa
             </p>
           </div>
-          <div style={S.footerLinks}>
+          <div
+            style={{
+              display: "flex",
+              gap: "20px",
+              alignItems: "center",
+              flexWrap: "wrap",
+              justifyContent: "center",
+            }}
+          >
             <a href="#cardápio" style={S.footerLink}>
               Cardápio
             </a>
             <a href="#como-funciona" style={S.footerLink}>
               Como funciona
             </a>
-            <a href="https://wa.me/5511976373639" style={S.footerLink}>
-              WhatsApp
+
+            {/* Link com Ícone do WhatsApp */}
+            <a
+              href="https://wa.me/5511976373639"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <img
+                src="/iconWhatsapp.png"
+                alt="WhatsApp"
+                style={{ height: "32px", width: "32px" }}
+              />
             </a>
-            {/* LINK SECRETO PARA O PAINEL ADMIN */}
+
+            {/* Link com Ícone do Instagram */}
+            <a
+              href="https://www.instagram.com/giufit.food/"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <img
+                src="/iconInstagram.png"
+                alt="Instagram"
+                style={{ height: "32px", width: "32px" }}
+              />
+            </a>
+
             <a
               onClick={irParaAdmin}
               style={{ ...S.footerLink, cursor: "pointer" }}
