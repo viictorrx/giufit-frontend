@@ -1,27 +1,53 @@
-// src/AdminPanel.jsx
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { C, styles, adminStyles } from "./styles";
 
 const fmt = (v) =>
   v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-export default function AdminPanel({ menu, carregarMenu, setView }) {
+export default function AdminPanel() {
   const [autenticado, setAutenticado] = useState(false);
   const [senhaDigitada, setSenhaDigitada] = useState("");
 
-  // ─── NOVO ESTADO PARA CONTROLO DE EDIÇÃO ───
-  const [idEmEdicao, setIdEmEdicao] = useState(null); // Guarda o ID se estiver a editar
+  // ─── O ADMIN AGORA TEM O SEU PRÓPRIO ESTADO DE MENU ───
+  const [menu, setMenu] = useState([]);
 
+  const [idEmEdicao, setIdEmEdicao] = useState(null);
   const [novoNome, setNovoNome] = useState("");
   const [novaDescricao, setNovaDescricao] = useState("");
   const [preco250, setPreco250] = useState("");
   const [preco350, setPreco350] = useState("");
   const [preco500, setPreco500] = useState("");
 
+  // ─── FUNÇÃO PARA BUSCAR OS PRATOS DIRETAMENTE DO BANCO ───
+  const carregarMenu = () => {
+    fetch("https://giufit-backend.onrender.com/pratos")
+      .then((res) => res.json())
+      .then((data) => {
+        if (!Array.isArray(data)) return;
+        const pratosFormatados = data.map((prato) => ({
+          id: prato.id,
+          nome: prato.nome || "Sem Nome",
+          descricao: prato.descricao || "",
+          tamanhos: [
+            { tamanho: "250g", preco: Number(prato.preco_250g) || 0 },
+            { tamanho: "350g", preco: Number(prato.preco_350g) || 0 },
+            { tamanho: "500g", preco: Number(prato.preco_500g) || 0 },
+          ],
+        }));
+        setMenu(pratosFormatados);
+      })
+      .catch((err) => console.error("Erro ao carregar o menu:", err));
+  };
+
+  // Carrega os dados APENAS quando o utilizador acertar a senha
+  useEffect(() => {
+    if (autenticado) {
+      carregarMenu();
+    }
+  }, [autenticado]);
+
   const handleLogin = (e) => {
     e.preventDefault();
-
-    // Agora o React vai buscar a senha guardada no ficheiro .env!
     if (senhaDigitada === import.meta.env.VITE_ADMIN_PASSWORD) {
       setAutenticado(true);
       setSenhaDigitada("");
@@ -43,7 +69,6 @@ export default function AdminPanel({ menu, carregarMenu, setView }) {
       return;
     }
 
-    // Se houver um idEmEdicao, faz PUT para atualizar. Se não, faz POST para criar novo.
     const url = idEmEdicao
       ? `https://giufit-backend.onrender.com/pratos/${idEmEdicao}`
       : "https://giufit-backend.onrender.com/pratos";
@@ -73,32 +98,30 @@ export default function AdminPanel({ menu, carregarMenu, setView }) {
   };
 
   const handleDeletarPrato = (id) => {
-    if (confirm("Tem a certeza que deseja eliminar esta marmita?")) {
+    if (window.confirm("Tem a certeza que deseja eliminar esta marmita?")) {
       fetch(`https://giufit-backend.onrender.com/pratos/${id}`, {
         method: "DELETE",
       })
         .then(() => {
           carregarMenu();
-          if (idEmEdicao === id) limparFormulario(); // Cancela a edição se o prato for apagado
+          if (idEmEdicao === id) limparFormulario();
         })
         .catch((err) => console.error(err));
     }
   };
 
-  // Função que puxa os dados do prato de volta para as caixas de texto
   const iniciarEdicao = (prato) => {
     setIdEmEdicao(prato.id);
     setNovoNome(prato.nome);
     setNovaDescricao(prato.descricao);
 
-    // Procura os preços antigos para preencher os inputs
     const p250 = prato.tamanhos.find((t) => t.tamanho === "250g");
     const p350 = prato.tamanhos.find((t) => t.tamanho === "350g");
     const p500 = prato.tamanhos.find((t) => t.tamanho === "500g");
 
-    setPreco250(p250 ? p250.preco : "");
-    setPreco350(p350 ? p350.preco : "");
-    setPreco500(p500 ? p500.preco : "");
+    setPreco250(p250 && p250.preco > 0 ? p250.preco : "");
+    setPreco350(p350 && p350.preco > 0 ? p350.preco : "");
+    setPreco500(p500 && p500.preco > 0 ? p500.preco : "");
   };
 
   const limparFormulario = () => {
@@ -112,72 +135,66 @@ export default function AdminPanel({ menu, carregarMenu, setView }) {
 
   if (!autenticado) {
     return (
-      <form
-        onSubmit={handleLogin}
+      <div
         style={{
-          background: "#fff",
-          padding: 40,
-          borderRadius: 24,
-          boxShadow: "0 10px 40px rgba(0,0,0,0.08)",
-          width: "100%",
-          maxWidth: 400,
-          textAlign: "center",
+          display: "flex",
+          justifyContent: "center",
+          padding: "40px 20px",
         }}
       >
-        <span style={{ fontSize: 48, display: "block", marginBottom: 10 }}>
-          🔒
-        </span>
-        <h2 style={{ ...styles.menuTitle, fontSize: 24, marginBottom: 6 }}>
-          Área Restrita
-        </h2>
-        <p style={{ color: C.muted, fontSize: 14, marginBottom: 24 }}>
-          Digite a senha de administrador.
-        </p>
-        <input
-          type="password"
-          placeholder="Senha secreta..."
-          value={senhaDigitada}
-          onChange={(e) => setSenhaDigitada(e.target.value)}
+        <form
+          onSubmit={handleLogin}
           style={{
-            ...adminStyles.input,
-            textAlign: "center",
-            fontSize: 16,
-            letterSpacing: 2,
-          }}
-          required
-        />
-        <button
-          type="submit"
-          style={{
-            ...styles.heroBtn,
+            background: "#fff",
+            padding: 40,
+            borderRadius: 24,
+            boxShadow: "0 10px 40px rgba(0,0,0,0.08)",
             width: "100%",
-            border: "none",
-            cursor: "pointer",
-            marginTop: 20,
+            maxWidth: 400,
+            textAlign: "center",
           }}
         >
-          Entrar no Panel
-        </button>
-        <button
-          type="button"
-          onClick={() => setView("loja")}
-          style={{
-            background: "none",
-            border: "none",
-            color: C.pink,
-            marginTop: 16,
-            cursor: "pointer",
-            fontWeight: "bold",
-          }}
-        >
-          Voltar para a Loja
-        </button>
-      </form>
+          <span style={{ fontSize: 48, display: "block", marginBottom: 10 }}>
+            🔒
+          </span>
+          <h2 style={{ ...styles.menuTitle, fontSize: 24, marginBottom: 6 }}>
+            Área Restrita
+          </h2>
+          <p style={{ color: C.muted, fontSize: 14, marginBottom: 24 }}>
+            Digite a senha de administrador.
+          </p>
+          <input
+            type="password"
+            placeholder="Senha secreta..."
+            value={senhaDigitada}
+            onChange={(e) => setSenhaDigitada(e.target.value)}
+            style={{
+              ...adminStyles.input,
+              textAlign: "center",
+              fontSize: 16,
+              letterSpacing: 2,
+            }}
+            required
+          />
+          <button
+            type="submit"
+            style={{
+              ...styles.heroBtn,
+              width: "100%",
+              border: "none",
+              cursor: "pointer",
+              marginTop: 20,
+            }}
+          >
+            Entrar no Painel
+          </button>
+        </form>
+      </div>
     );
   }
 
   return (
-    <div style={{ width: "100%" }}>
+    <div style={{ width: "100%", padding: "20px" }}>
       <div style={styles.menuHeader}>
         <h2 style={styles.menuTitle}>⚙️ Painel de Gestão GiuFit</h2>
         <p style={styles.menuSub}>
@@ -310,11 +327,12 @@ export default function AdminPanel({ menu, carregarMenu, setView }) {
 
         {/* Lista de Pratos com Opção de Editar e Eliminar */}
         <div style={{ flex: "1 1 400px" }}>
+          {/* O PONTO DE INTERROGAÇÃO AQUI É O NOSSO ESCUDO DE PROTEÇÃO */}
           <h3 style={{ ...styles.cardName, fontSize: 20, marginBottom: 20 }}>
-            📋 Pratos Ativos ({menu.length})
+            📋 Pratos Ativos ({menu?.length || 0})
           </h3>
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {menu.length === 0 ? (
+            {!menu || menu.length === 0 ? (
               <p style={{ color: C.muted }}>Nenhum prato cadastrado.</p>
             ) : (
               menu.map((p) => (
