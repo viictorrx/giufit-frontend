@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { C, styles, adminStyles } from "./styles";
+import { API_URL, normalizarTamanhos } from "./api";
 
 const fmt = (v) =>
   v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -7,6 +8,9 @@ const fmt = (v) =>
 export default function AdminPanel() {
   const [autenticado, setAutenticado] = useState(false);
   const [senhaDigitada, setSenhaDigitada] = useState("");
+  // O token fica só na memória: some ao recarregar a página (de propósito).
+  const [token, setToken] = useState("");
+  const [entrando, setEntrando] = useState(false);
 
   // ─── O ADMIN AGORA TEM O SEU PRÓPRIO ESTADO DE MENU ───
   const [menu, setMenu] = useState([]);
@@ -18,23 +22,41 @@ export default function AdminPanel() {
   const [preco350, setPreco350] = useState("");
   const [preco500, setPreco500] = useState("");
 
-  // ─── FUNÇÃO PARA BUSCAR OS PRATOS DIRETAMENTE DO BANCO ───
+  const authHeaders = (extra = {}) => ({
+    Authorization: `Bearer ${token}`,
+    ...extra,
+  });
+
+  const sair = () => {
+    setToken("");
+    setAutenticado(false);
+  };
+
+  // Resposta com erro de autorização -> volta para a tela de login
+  const checar = (res) => {
+    if (res.status === 401) {
+      sair();
+      throw new Error("Sessão inválida. Entre novamente.");
+    }
+    if (!res.ok) throw new Error(`Erro ${res.status}`);
+    return res;
+  };
+
+  // ─── BUSCA TODOS OS PRATOS (inclusive inativos) ───
   const carregarMenu = () => {
-    fetch("https://giufit-backend.onrender.com/pratos")
+    fetch(`${API_URL}/admin/pratos`, { headers: authHeaders() })
+      .then(checar)
       .then((res) => res.json())
       .then((data) => {
         if (!Array.isArray(data)) return;
-        const pratosFormatados = data.map((prato) => ({
-          id: prato.id,
-          nome: prato.nome || "Sem Nome",
-          descricao: prato.descricao || "",
-          tamanhos: [
-            { tamanho: "250g", preco: Number(prato.preco_250g) || 0 },
-            { tamanho: "350g", preco: Number(prato.preco_350g) || 0 },
-            { tamanho: "500g", preco: Number(prato.preco_500g) || 0 },
-          ],
-        }));
-        setMenu(pratosFormatados);
+        setMenu(
+          data.map((prato) => ({
+            id: prato.id,
+            nome: prato.nome || "Sem Nome",
+            descricao: prato.descricao || "",
+            tamanhos: normalizarTamanhos(prato),
+          })),
+        );
       })
       .catch((err) => console.error("Erro ao carregar o menu:", err));
   };
@@ -44,17 +66,32 @@ export default function AdminPanel() {
     if (autenticado) {
       carregarMenu();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autenticado]);
 
+  // A senha é conferida pelo servidor, nunca dentro do código do site.
   const handleLogin = (e) => {
     e.preventDefault();
-    if (senhaDigitada === import.meta.env.VITE_ADMIN_PASSWORD) {
-      setAutenticado(true);
-      setSenhaDigitada("");
-    } else {
-      alert("Senha incorreta!");
-      setSenhaDigitada("");
-    }
+    setEntrando(true);
+    fetch(`${API_URL}/admin/login`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${senhaDigitada}` },
+    })
+      .then((res) => {
+        if (res.status === 429) {
+          alert("Muitas tentativas. Aguarde 1 minuto e tente de novo.");
+        } else if (res.ok) {
+          setToken(senhaDigitada);
+          setAutenticado(true);
+        } else {
+          alert("Senha incorreta!");
+        }
+      })
+      .catch(() => alert("Não foi possível falar com o servidor."))
+      .finally(() => {
+        setSenhaDigitada("");
+        setEntrando(false);
+      });
   };
 
   const handleSalvarPrato = (e) => {
@@ -70,20 +107,21 @@ export default function AdminPanel() {
     }
 
     const url = idEmEdicao
-      ? `https://giufit-backend.onrender.com/pratos/${idEmEdicao}`
-      : "https://giufit-backend.onrender.com/pratos";
+      ? `${API_URL}/pratos/${idEmEdicao}`
+      : `${API_URL}/pratos`;
     const method = idEmEdicao ? "PUT" : "POST";
 
     fetch(url, {
       method: method,
-      headers: { "Content-Type": "application/json" },
+      headers: authHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({
-        nome: novoNome,
-        descricao: novaDescricao,
+        nome: novoNome.trim(),
+        descricao: novaDescricao.trim(),
         ativo: true,
         opcoes: opcoes,
       }),
     })
+      .then(checar)
       .then((res) => res.json())
       .then(() => {
         carregarMenu();
@@ -94,19 +132,21 @@ export default function AdminPanel() {
             : "Marmita cadastrada com sucesso!",
         );
       })
-      .catch((err) => alert("Erro ao salvar: " + err));
+      .catch((err) => alert("Erro ao salvar: " + err.message));
   };
 
   const handleDeletarPrato = (id) => {
     if (window.confirm("Tem a certeza que deseja eliminar esta marmita?")) {
-      fetch(`https://giufit-backend.onrender.com/pratos/${id}`, {
+      fetch(`${API_URL}/pratos/${id}`, {
         method: "DELETE",
+        headers: authHeaders(),
       })
+        .then(checar)
         .then(() => {
           carregarMenu();
           if (idEmEdicao === id) limparFormulario();
         })
-        .catch((err) => console.error(err));
+        .catch((err) => alert("Erro ao excluir: " + err.message));
     }
   };
 
@@ -178,15 +218,16 @@ export default function AdminPanel() {
           />
           <button
             type="submit"
+            disabled={entrando}
             style={{
               ...styles.heroBtn,
               width: "100%",
               border: "none",
-              cursor: "pointer",
+              cursor: entrando ? "wait" : "pointer",
               marginTop: 20,
             }}
           >
-            Entrar no Painel
+            {entrando ? "Verificando..." : "Entrar no Painel"}
           </button>
         </form>
       </div>
