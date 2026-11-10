@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { API_URL, normalizarTamanhos } from "./api";
 
 // Função blindada: Se o banco mandar algo errado, ele transforma em R$ 0,00 e não trava a tela
 const fmt = (v) => {
@@ -27,12 +28,9 @@ export default function Loja({ irParaAdmin }) {
     const onScroll = () => setScrolled(window.scrollY > 80);
     window.addEventListener("scroll", onScroll);
 
-    fetch("https://giufit-backend.onrender.com/pratos")
+    fetch(`${API_URL}/pratos`)
       .then((res) => res.json())
       .then((data) => {
-        // Imprime os dados no console para sabermos o que está a chegar
-        console.log("Dados que chegaram do banco:", data);
-
         // Se a API por algum motivo não devolver uma lista, paramos aqui para não quebrar
         if (!Array.isArray(data)) return;
 
@@ -44,12 +42,7 @@ export default function Loja({ irParaAdmin }) {
           cal: 350,
           prot: 30,
           categoria: "Pratos",
-          tamanhos: [
-            // Se o banco não enviar o preço correto, colocamos um valor padrão provisório para não travar
-            { tamanho: "250g", preco: Number(prato.preco_250g) || 15 },
-            { tamanho: "350g", preco: Number(prato.preco_350g) || 20 },
-            { tamanho: "500g", preco: Number(prato.preco_500g) || 25 },
-          ],
+          tamanhos: normalizarTamanhos(prato),
         }));
 
         setMenuData(pratosDoBanco);
