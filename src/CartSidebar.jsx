@@ -1,91 +1,70 @@
-// src/CartSidebar.jsx
-import { styles } from "./styles";
+import { moeda } from "./api";
+import { IconCarrinho, IconChat, IconFechar, IconMais, IconMenos, PratoIlustrado } from "./components/Icons";
 
-const fmt = (v) =>
-  v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-
-export default function CartSidebar({
-  carrinho,
-  carrinhoAberto,
-  setCarrinhoAberto,
-  altQtd,
-  total,
-  finalizarPedido,
-}) {
+export default function CartSidebar({ aberto, fechar, carrinho, alterarQtd, total, finalizarPedido }) {
   return (
     <>
-      <div
-        style={{
-          ...styles.overlay,
-          opacity: carrinhoAberto ? 1 : 0,
-          pointerEvents: carrinhoAberto ? "all" : "none",
-        }}
-        onClick={() => setCarrinhoAberto(false)}
-      />
+      <div className={`fundo ${aberto ? "aberto" : ""}`} onClick={fechar} aria-hidden="true" />
       <aside
-        style={{
-          ...styles.sidebar,
-          transform: carrinhoAberto ? "translateX(0)" : "translateX(100%)",
-        }}
+        className={`gaveta ${aberto ? "aberta" : ""}`}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Seu pedido"
+        inert={!aberto}
       >
-        <div style={styles.sideHead}>
-          <h2 style={styles.sideTitle}>🛒 Seu pedido</h2>
-          <button
-            style={styles.closeBtn}
-            onClick={() => setCarrinhoAberto(false)}
-          >
-            ✕
+        <div className="gaveta-cab">
+          <h2>Seu pedido</h2>
+          <button type="button" className="btn-icone" onClick={fechar} aria-label="Fechar carrinho">
+            <IconFechar />
           </button>
         </div>
 
         {carrinho.length === 0 ? (
-          <div style={styles.emptyCart}>
-            <span style={{ fontSize: 48 }}>🍱</span>
+          <div className="vazio">
+            <IconCarrinho size={44} />
             <p>
               Seu carrinho está vazio.
               <br />
-              Adicione marmitas!
+              Adicione algumas marmitas!
             </p>
+            <button type="button" className="btn btn-primary" onClick={fechar}>
+              Ver cardápio
+            </button>
           </div>
         ) : (
           <>
-            <div style={styles.cartItems}>
+            <div className="itens">
               {carrinho.map((item) => (
-                <div key={item.chave} style={styles.cartItem}>
-                  <span style={styles.cartEmoji}>{item.emoji}</span>
-                  <div style={styles.cartInfo}>
-                    <strong style={styles.cartName}>{item.nome}</strong>
-                    <span style={styles.cartTam}>{item.tamanho}</span>
+                <div className="item" key={item.chave}>
+                  <div className="item-foto">
+                    {item.foto ? <img src={item.foto} alt="" /> : <PratoIlustrado />}
                   </div>
-                  <div style={styles.cartQtd}>
-                    <button
-                      style={styles.qtdBtn}
-                      onClick={() => altQtd(item.chave, -1)}
-                    >
-                      −
-                    </button>
-                    <span style={styles.qtdNum}>{item.qtd}</span>
-                    <button
-                      style={styles.qtdBtn}
-                      onClick={() => altQtd(item.chave, 1)}
-                    >
-                      +
-                    </button>
+                  <div>
+                    <h3>{item.nome}</h3>
+                    <small>{item.tamanho}</small>
+                    <div className="qtd">
+                      <button type="button" onClick={() => alterarQtd(item.chave, -1)} aria-label={`Diminuir ${item.nome}`}>
+                        <IconMenos size={16} />
+                      </button>
+                      <span aria-live="polite">{item.qtd}</span>
+                      <button type="button" onClick={() => alterarQtd(item.chave, 1)} aria-label={`Aumentar ${item.nome}`}>
+                        <IconMais size={16} />
+                      </button>
+                    </div>
                   </div>
-                  <span style={styles.cartPreco}>
-                    {fmt(item.preco * item.qtd)}
-                  </span>
+                  <span className="item-preco">{moeda(item.preco * item.qtd)}</span>
                 </div>
               ))}
             </div>
-            <div style={styles.cartFooter}>
-              <div style={styles.totalRow}>
-                <span style={styles.totalLabel}>Total</span>
-                <span style={styles.totalVal}>{fmt(total)}</span>
+            <div className="gaveta-rodape">
+              <div className="total">
+                <span>Total</span>
+                <strong>{moeda(total)}</strong>
               </div>
-              <button style={styles.whatsBtn} onClick={finalizarPedido}>
-                Pedir pelo WhatsApp 💬
+              <button type="button" className="btn btn-whats btn-block" onClick={finalizarPedido}>
+                <IconChat size={20} /> Pedir pelo WhatsApp
               </button>
+              <p className="nota">Você confirma o pedido e a entrega direto com a gente.</p>
             </div>
           </>
         )}
