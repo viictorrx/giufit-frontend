@@ -1,38 +1,29 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Loja from "./Loja";
 import AdminPanel from "./AdminPanel";
 
+// O painel abre em /#admin (e a loja continua sendo a página principal).
+const naAreaAdmin = () => window.location.hash === "#admin";
+
 export default function App() {
-  // Começa mostrando a loja para os clientes
-  const [view, setView] = useState("loja");
+  const [admin, setAdmin] = useState(naAreaAdmin);
 
-  // Funções para trocar de ecrã
-  const irParaAdmin = () => setView("admin");
-  const irParaLoja = () => setView("loja");
+  useEffect(() => {
+    const aoMudar = () => setAdmin(naAreaAdmin());
+    window.addEventListener("hashchange", aoMudar);
+    return () => window.removeEventListener("hashchange", aoMudar);
+  }, []);
 
-  // Se o estado for "admin", mostra o seu painel atual
-  if (view === "admin") {
-    return (
-      <div>
-        {/* Um botão simples para si conseguir voltar à loja depois de gerir as marmitas */}
-        <button
-          onClick={irParaLoja}
-          style={{
-            padding: "10px",
-            background: "#4a8c1c",
-            color: "white",
-            border: "none",
-            width: "100%",
-            cursor: "pointer",
-          }}
-        >
-          ← Voltar para a Loja
-        </button>
-        <AdminPanel />
-      </div>
-    );
-  }
+  const abrirAdmin = () => {
+    window.location.hash = "admin";
+    window.scrollTo(0, 0);
+  };
+  const voltarParaLoja = () => {
+    history.pushState("", document.title, window.location.pathname);
+    setAdmin(false);
+    window.scrollTo(0, 0);
+  };
 
-  // Caso contrário, mostra a loja nova espetacular
-  return <Loja irParaAdmin={irParaAdmin} />;
+  if (admin) return <AdminPanel aoSair={voltarParaLoja} />;
+  return <Loja irParaAdmin={abrirAdmin} />;
 }

@@ -20,3 +20,15 @@ export function normalizarTamanhos(prato) {
     { tamanho: "500g", preco: Number(prato.preco_500g) || 0 },
   ].filter((t) => t.preco > 0);
 }
+
+// "foto_url" vem do backend como caminho relativo (/pratos/1/foto?v=123).
+export const urlDaFoto = (prato) =>
+  prato?.foto_url ? `${API_URL}${prato.foto_url}` : null;
+
+export const moeda = (v) => {
+  const n = Number(v);
+  return (Number.isFinite(n) ? n : 0).toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  });
+};

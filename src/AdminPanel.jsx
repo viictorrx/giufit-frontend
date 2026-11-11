@@ -1,448 +1,422 @@
-import { useState, useEffect } from "react";
-import { C, styles, adminStyles } from "./styles";
-import { API_URL, normalizarTamanhos } from "./api";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { API_URL, moeda, normalizarTamanhos, urlDaFoto } from "./api";
+import { prepararFoto } from "./foto";
+import {
+  IconCadeado,
+  IconCamera,
+  IconLapis,
+  IconLixeira,
+  PratoIlustrado,
+} from "./components/Icons";
 
-const fmt = (v) =>
-  v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+const TAMANHOS = ["250g", "350g", "500g"];
+const FORM_VAZIO = { nome: "", descricao: "", ativo: true, precos: { "250g": "", "350g": "", "500g": "" } };
 
-export default function AdminPanel() {
-  const [autenticado, setAutenticado] = useState(false);
-  const [senhaDigitada, setSenhaDigitada] = useState("");
-  // O token fica só na memória: some ao recarregar a página (de propósito).
-  const [token, setToken] = useState("");
+export default function AdminPanel({ aoSair }) {
+  const [token, setToken] = useState(""); // fica só na memória: some ao recarregar (de propósito)
+  const [senha, setSenha] = useState("");
   const [entrando, setEntrando] = useState(false);
+  const [erroLogin, setErroLogin] = useState("");
 
-  // ─── O ADMIN AGORA TEM O SEU PRÓPRIO ESTADO DE MENU ───
   const [menu, setMenu] = useState([]);
+  const [carregando, setCarregando] = useState(false);
+  const [emEdicao, setEmEdicao] = useState(null); // id do prato sendo editado
+  const [form, setForm] = useState(FORM_VAZIO);
+  const [fotoNova, setFotoNova] = useState(null); // { blob, previa }
+  const [fotoAtual, setFotoAtual] = useState(null); // url da foto já salva
+  const [removerFoto, setRemoverFoto] = useState(false);
+  const [salvando, setSalvando] = useState(false);
+  const [mensagem, setMensagem] = useState(null); // { tipo: "ok" | "erro", texto }
+  const inputFoto = useRef(null);
 
-  const [idEmEdicao, setIdEmEdicao] = useState(null);
-  const [novoNome, setNovoNome] = useState("");
-  const [novaDescricao, setNovaDescricao] = useState("");
-  const [preco250, setPreco250] = useState("");
-  const [preco350, setPreco350] = useState("");
-  const [preco500, setPreco500] = useState("");
+  const autenticado = Boolean(token);
+  const cabecalho = useCallback(
+    (extra = {}) => ({ Authorization: `Bearer ${token}`, ...extra }),
+    [token],
+  );
 
-  const authHeaders = (extra = {}) => ({
-    Authorization: `Bearer ${token}`,
-    ...extra,
-  });
-
-  const sair = () => {
+  const sair = useCallback(() => {
     setToken("");
-    setAutenticado(false);
-  };
+    setMenu([]);
+  }, []);
 
-  // Resposta com erro de autorização -> volta para a tela de login
-  const checar = (res) => {
-    if (res.status === 401) {
-      sair();
-      throw new Error("Sessão inválida. Entre novamente.");
-    }
-    if (!res.ok) throw new Error(`Erro ${res.status}`);
-    return res;
-  };
+  // 401 = senha inválida/alterada: volta para o login.
+  const checar = useCallback(
+    (res) => {
+      if (res.status === 401) {
+        sair();
+        throw new Error("Sessão inválida. Entre novamente.");
+      }
+      if (!res.ok) {
+        const e = new Error(`Erro ${res.status}`);
+        e.status = res.status;
+        throw e;
+      }
+      return res;
+    },
+    [sair],
+  );
 
-  // ─── BUSCA TODOS OS PRATOS (inclusive inativos) ───
-  const carregarMenu = () => {
-    fetch(`${API_URL}/admin/pratos`, { headers: authHeaders() })
+  const buscarMenu = useCallback(() => {
+    return fetch(`${API_URL}/admin/pratos`, { headers: cabecalho() })
       .then(checar)
       .then((res) => res.json())
       .then((data) => {
         if (!Array.isArray(data)) return;
         setMenu(
-          data.map((prato) => ({
-            id: prato.id,
-            nome: prato.nome || "Sem Nome",
-            descricao: prato.descricao || "",
-            tamanhos: normalizarTamanhos(prato),
+          data.map((p) => ({
+            id: p.id,
+            nome: p.nome || "Sem nome",
+            descricao: p.descricao || "",
+            ativo: p.ativo !== false,
+            foto: urlDaFoto(p),
+            tamanhos: normalizarTamanhos(p),
           })),
         );
       })
-      .catch((err) => console.error("Erro ao carregar o menu:", err));
-  };
+      .catch((err) => setMensagem({ tipo: "erro", texto: err.message }))
+      .finally(() => setCarregando(false));
+  }, [cabecalho, checar]);
 
-  // Carrega os dados APENAS quando o utilizador acertar a senha
+  const carregarMenu = useCallback(() => {
+    setCarregando(true);
+    return buscarMenu();
+  }, [buscarMenu]);
+
+  // Primeira carga logo depois do login (o "carregando" já foi ligado em entrar()).
   useEffect(() => {
-    if (autenticado) {
-      carregarMenu();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autenticado]);
+    if (autenticado) buscarMenu();
+  }, [autenticado, buscarMenu]);
 
-  // A senha é conferida pelo servidor, nunca dentro do código do site.
-  const handleLogin = (e) => {
+  // ── Login (a senha é conferida pelo servidor) ───────────
+  const entrar = (e) => {
     e.preventDefault();
     setEntrando(true);
-    fetch(`${API_URL}/admin/login`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${senhaDigitada}` },
-    })
+    setErroLogin("");
+    fetch(`${API_URL}/admin/login`, { method: "POST", headers: { Authorization: `Bearer ${senha}` } })
       .then((res) => {
-        if (res.status === 429) {
-          alert("Muitas tentativas. Aguarde 1 minuto e tente de novo.");
-        } else if (res.ok) {
-          setToken(senhaDigitada);
-          setAutenticado(true);
-        } else {
-          alert("Senha incorreta!");
+        if (res.status === 429) setErroLogin("Muitas tentativas. Aguarde 1 minuto e tente de novo.");
+        else if (res.ok) {
+          setCarregando(true);
+          setToken(senha);
         }
+        else setErroLogin("Senha incorreta.");
       })
-      .catch(() => alert("Não foi possível falar com o servidor."))
+      .catch(() => setErroLogin("Não foi possível falar com o servidor. Tente novamente."))
       .finally(() => {
-        setSenhaDigitada("");
+        setSenha("");
         setEntrando(false);
       });
   };
 
-  const handleSalvarPrato = (e) => {
-    e.preventDefault();
-    const opcoes = [];
-    if (preco250) opcoes.push({ tamanho: "250g", preco: parseFloat(preco250) });
-    if (preco350) opcoes.push({ tamanho: "350g", preco: parseFloat(preco350) });
-    if (preco500) opcoes.push({ tamanho: "500g", preco: parseFloat(preco500) });
+  // ── Formulário ──────────────────────────────────────────
+  const limparFormulario = () => {
+    setEmEdicao(null);
+    setForm(FORM_VAZIO);
+    setFotoNova((f) => {
+      if (f?.previa) URL.revokeObjectURL(f.previa);
+      return null;
+    });
+    setFotoAtual(null);
+    setRemoverFoto(false);
+    if (inputFoto.current) inputFoto.current.value = "";
+  };
 
-    if (!novoNome || opcoes.length === 0) {
-      alert("Por favor, preencha o nome e pelo menos um preço!");
+  const iniciarEdicao = (p) => {
+    limparFormulario();
+    setEmEdicao(p.id);
+    setForm({
+      nome: p.nome,
+      descricao: p.descricao,
+      ativo: p.ativo,
+      precos: Object.fromEntries(
+        TAMANHOS.map((t) => [t, p.tamanhos.find((x) => x.tamanho === t)?.preco || ""]),
+      ),
+    });
+    setFotoAtual(p.foto);
+    setMensagem(null);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const escolherFoto = async (e) => {
+    const arquivo = e.target.files?.[0];
+    if (!arquivo) return;
+    setMensagem(null);
+    try {
+      const blob = await prepararFoto(arquivo);
+      setFotoNova((antiga) => {
+        if (antiga?.previa) URL.revokeObjectURL(antiga.previa);
+        return { blob, previa: URL.createObjectURL(blob) };
+      });
+      setRemoverFoto(false);
+    } catch (err) {
+      setMensagem({ tipo: "erro", texto: err.message });
+      e.target.value = "";
+    }
+  };
+
+  const enviarFoto = (id, blob) =>
+    fetch(`${API_URL}/pratos/${id}/foto`, {
+      method: "PUT",
+      headers: cabecalho({ "Content-Type": blob.type }),
+      body: blob,
+    }).then(checar);
+
+  const salvar = async (e) => {
+    e.preventDefault();
+    const opcoes = TAMANHOS.filter((t) => Number(form.precos[t]) > 0).map((t) => ({
+      tamanho: t,
+      preco: Number(form.precos[t]),
+    }));
+    if (!form.nome.trim() || opcoes.length === 0) {
+      setMensagem({ tipo: "erro", texto: "Preencha o nome e pelo menos um preço." });
       return;
     }
 
-    const url = idEmEdicao
-      ? `${API_URL}/pratos/${idEmEdicao}`
-      : `${API_URL}/pratos`;
-    const method = idEmEdicao ? "PUT" : "POST";
+    setSalvando(true);
+    setMensagem(null);
+    try {
+      const corpo = JSON.stringify({
+        nome: form.nome.trim(),
+        descricao: form.descricao.trim(),
+        ativo: form.ativo,
+        opcoes,
+      });
+      const editando = emEdicao !== null;
+      const res = await fetch(editando ? `${API_URL}/pratos/${emEdicao}` : `${API_URL}/pratos`, {
+        method: editando ? "PUT" : "POST",
+        headers: cabecalho({ "Content-Type": "application/json" }),
+        body: corpo,
+      }).then(checar);
+      const dados = await res.json();
+      const id = editando ? emEdicao : dados.id_prato;
 
-    fetch(url, {
-      method: method,
-      headers: authHeaders({ "Content-Type": "application/json" }),
-      body: JSON.stringify({
-        nome: novoNome.trim(),
-        descricao: novaDescricao.trim(),
-        ativo: true,
-        opcoes: opcoes,
-      }),
-    })
-      .then(checar)
-      .then((res) => res.json())
-      .then(() => {
-        carregarMenu();
-        limparFormulario();
-        alert(
-          idEmEdicao
-            ? "Marmita atualizada com sucesso!"
-            : "Marmita cadastrada com sucesso!",
-        );
-      })
-      .catch((err) => alert("Erro ao salvar: " + err.message));
-  };
+      let avisoFoto = "";
+      if (fotoNova) {
+        try {
+          await enviarFoto(id, fotoNova.blob);
+        } catch {
+          avisoFoto = " A marmita foi salva, mas a foto não foi enviada. Tente anexar de novo.";
+        }
+      } else if (removerFoto && editando) {
+        await fetch(`${API_URL}/pratos/${id}/foto`, { method: "DELETE", headers: cabecalho() }).catch(() => {});
+      }
 
-  const handleDeletarPrato = (id) => {
-    if (window.confirm("Tem a certeza que deseja eliminar esta marmita?")) {
-      fetch(`${API_URL}/pratos/${id}`, {
-        method: "DELETE",
-        headers: authHeaders(),
-      })
-        .then(checar)
-        .then(() => {
-          carregarMenu();
-          if (idEmEdicao === id) limparFormulario();
-        })
-        .catch((err) => alert("Erro ao excluir: " + err.message));
+      await carregarMenu();
+      limparFormulario();
+      setMensagem({
+        tipo: avisoFoto ? "erro" : "ok",
+        texto: (editando ? "Marmita atualizada!" : "Marmita cadastrada!") + avisoFoto,
+      });
+    } catch (err) {
+      setMensagem({ tipo: "erro", texto: err.message || "Erro ao salvar." });
+    } finally {
+      setSalvando(false);
     }
   };
 
-  const iniciarEdicao = (prato) => {
-    setIdEmEdicao(prato.id);
-    setNovoNome(prato.nome);
-    setNovaDescricao(prato.descricao);
-
-    const p250 = prato.tamanhos.find((t) => t.tamanho === "250g");
-    const p350 = prato.tamanhos.find((t) => t.tamanho === "350g");
-    const p500 = prato.tamanhos.find((t) => t.tamanho === "500g");
-
-    setPreco250(p250 && p250.preco > 0 ? p250.preco : "");
-    setPreco350(p350 && p350.preco > 0 ? p350.preco : "");
-    setPreco500(p500 && p500.preco > 0 ? p500.preco : "");
+  const excluir = (p) => {
+    if (!window.confirm(`Excluir "${p.nome}" do cardápio? Isso não pode ser desfeito.`)) return;
+    fetch(`${API_URL}/pratos/${p.id}`, { method: "DELETE", headers: cabecalho() })
+      .then(checar)
+      .then(() => {
+        if (emEdicao === p.id) limparFormulario();
+        setMensagem({ tipo: "ok", texto: "Marmita excluída." });
+        return carregarMenu();
+      })
+      .catch((err) => setMensagem({ tipo: "erro", texto: err.message }));
   };
 
-  const limparFormulario = () => {
-    setIdEmEdicao(null);
-    setNovoNome("");
-    setNovaDescricao("");
-    setPreco250("");
-    setPreco350("");
-    setPreco500("");
+  const alternarAtivo = (p) => {
+    fetch(`${API_URL}/pratos/${p.id}`, {
+      method: "PUT",
+      headers: cabecalho({ "Content-Type": "application/json" }),
+      body: JSON.stringify({
+        nome: p.nome,
+        descricao: p.descricao,
+        ativo: !p.ativo,
+        opcoes: p.tamanhos.filter((t) => t.preco > 0),
+      }),
+    })
+      .then(checar)
+      .then(carregarMenu)
+      .catch((err) => setMensagem({ tipo: "erro", texto: err.message }));
   };
 
+  const campo = (chave) => (e) => setForm((f) => ({ ...f, [chave]: e.target.value }));
+  const previa = removerFoto ? null : fotoNova?.previa || fotoAtual;
+
+  // ── Tela de login ───────────────────────────────────────
   if (!autenticado) {
     return (
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "center",
-          padding: "40px 20px",
-        }}
-      >
-        <form
-          onSubmit={handleLogin}
-          style={{
-            background: "#fff",
-            padding: 40,
-            borderRadius: 24,
-            boxShadow: "0 10px 40px rgba(0,0,0,0.08)",
-            width: "100%",
-            maxWidth: 400,
-            textAlign: "center",
-          }}
-        >
-          <span style={{ fontSize: 48, display: "block", marginBottom: 10 }}>
-            🔒
+      <div className="admin admin-login">
+        <form className="admin-card login-card" onSubmit={entrar}>
+          <span className="login-ico">
+            <IconCadeado size={26} />
           </span>
-          <h2 style={{ ...styles.menuTitle, fontSize: 24, marginBottom: 6 }}>
-            Área Restrita
-          </h2>
-          <p style={{ color: C.muted, fontSize: 14, marginBottom: 24 }}>
-            Digite a senha de administrador.
-          </p>
+          <h1>Área restrita</h1>
+          <p>Digite a senha de administrador para gerenciar o cardápio.</p>
+          <label htmlFor="senha" className="sr-only">Senha</label>
           <input
+            id="senha"
             type="password"
-            placeholder="Senha secreta..."
-            value={senhaDigitada}
-            onChange={(e) => setSenhaDigitada(e.target.value)}
-            style={{
-              ...adminStyles.input,
-              textAlign: "center",
-              fontSize: 16,
-              letterSpacing: 2,
-            }}
+            className="campo"
+            placeholder="Senha"
+            autoComplete="current-password"
+            value={senha}
+            onChange={(e) => setSenha(e.target.value)}
             required
           />
-          <button
-            type="submit"
-            disabled={entrando}
-            style={{
-              ...styles.heroBtn,
-              width: "100%",
-              border: "none",
-              cursor: entrando ? "wait" : "pointer",
-              marginTop: 20,
-            }}
-          >
-            {entrando ? "Verificando..." : "Entrar no Painel"}
+          {erroLogin && <p className="msg erro" role="alert">{erroLogin}</p>}
+          <button type="submit" className="btn btn-primary btn-block" disabled={entrando}>
+            {entrando ? "Verificando…" : "Entrar"}
+          </button>
+          <button type="button" className="link-voltar" onClick={aoSair}>
+            ← Voltar para o site
           </button>
         </form>
       </div>
     );
   }
 
+  // ── Painel ──────────────────────────────────────────────
   return (
-    <div style={{ width: "100%", padding: "20px" }}>
-      <div style={styles.menuHeader}>
-        <h2 style={styles.menuTitle}>⚙️ Painel de Gestão GiuFit</h2>
-        <p style={styles.menuSub}>
-          Adicione, edite ou remova pratos do cardápio em tempo real
-        </p>
-      </div>
+    <div className="admin">
+      <header className="admin-topo">
+        <div className="container admin-topo-inner">
+          <div>
+            <h1>Painel GiuFit</h1>
+            <p>Cadastre pratos, preços e fotos. As mudanças aparecem no site na hora.</p>
+          </div>
+          <div className="admin-topo-acoes">
+            <button type="button" className="btn btn-ghost" onClick={aoSair}>Ver o site</button>
+            <button type="button" className="btn btn-ghost" onClick={() => { sair(); }}>Sair</button>
+          </div>
+        </div>
+      </header>
 
-      <div
-        style={{
-          display: "flex",
-          flexWrap: "wrap",
-          gap: 40,
-          alignItems: "flex-start",
-        }}
-      >
-        {/* Formulário Dinâmico */}
-        <form
-          onSubmit={handleSalvarPrato}
-          style={{
-            flex: "1 1 400px",
-            background: "#fff",
-            padding: 32,
-            borderRadius: 24,
-            boxShadow: "0 4px 24px rgba(0,0,0,0.05)",
-          }}
-        >
-          <h3
-            style={{
-              ...styles.cardName,
-              fontSize: 20,
-              marginBottom: 20,
-              color: idEmEdicao ? C.pink : C.green,
-            }}
-          >
-            {idEmEdicao ? "✏️ Editando Marmita" : "➕ Cadastrar Nova Marmita"}
-          </h3>
+      <div className="container admin-grid">
+        <form className="admin-card" onSubmit={salvar}>
+          <h2>{emEdicao ? "Editar marmita" : "Nova marmita"}</h2>
 
-          <label style={adminStyles.label}>Nome do Prato</label>
-          <input
-            type="text"
-            placeholder="Ex: Escondidinho de Patinho"
-            value={novoNome}
-            onChange={(e) => setNovoNome(e.target.value)}
-            style={adminStyles.input}
-            required
-          />
-
-          <label style={adminStyles.label}>Descrição</label>
-          <textarea
-            placeholder="Ingredientes..."
-            value={novaDescricao}
-            onChange={(e) => setNovaDescricao(e.target.value)}
-            style={{ ...adminStyles.input, height: 80, resize: "none" }}
-          />
-
-          <label
-            style={{ ...adminStyles.label, marginBottom: 12, display: "block" }}
-          >
-            Preços por Tamanho
-          </label>
-          <div style={{ display: "flex", gap: 12, marginBottom: 24 }}>
-            <div style={{ flex: 1 }}>
-              <span style={{ fontSize: 12, color: C.muted }}>250g</span>
-              <input
-                type="number"
-                step="0.01"
-                placeholder="R$ 0.00"
-                value={preco250}
-                onChange={(e) => setPreco250(e.target.value)}
-                style={adminStyles.input}
-              />
+          <div className="foto-campo">
+            <div className="foto-previa">
+              {previa ? <img src={previa} alt="Prévia da foto" /> : <PratoIlustrado />}
             </div>
-            <div style={{ flex: 1 }}>
-              <span style={{ fontSize: 12, color: C.muted }}>350g</span>
+            <div className="foto-acoes">
               <input
-                type="number"
-                step="0.01"
-                placeholder="R$ 0.00"
-                value={preco350}
-                onChange={(e) => setPreco350(e.target.value)}
-                style={adminStyles.input}
+                ref={inputFoto}
+                id="foto"
+                type="file"
+                accept="image/*"
+                className="sr-only"
+                onChange={escolherFoto}
               />
-            </div>
-            <div style={{ flex: 1 }}>
-              <span style={{ fontSize: 12, color: C.muted }}>500g</span>
-              <input
-                type="number"
-                step="0.01"
-                placeholder="R$ 0.00"
-                value={preco500}
-                onChange={(e) => setPreco500(e.target.value)}
-                style={adminStyles.input}
-              />
+              <label htmlFor="foto" className="btn btn-ghost">
+                <IconCamera size={18} /> {previa ? "Trocar foto" : "Anexar foto"}
+              </label>
+              {previa && (
+                <button
+                  type="button"
+                  className="link-perigo"
+                  onClick={() => {
+                    setFotoNova(null);
+                    setRemoverFoto(Boolean(fotoAtual));
+                    setFotoAtual(null);
+                    if (inputFoto.current) inputFoto.current.value = "";
+                  }}
+                >
+                  Remover foto
+                </button>
+              )}
+              <small>Escolha da galeria ou tire na hora. A foto é reduzida automaticamente.</small>
             </div>
           </div>
 
-          <button
-            type="submit"
-            style={{
-              ...styles.heroBtn,
-              width: "100%",
-              border: "none",
-              cursor: "pointer",
-              background: idEmEdicao ? C.pink : C.green,
-            }}
-          >
-            {idEmEdicao
-              ? "Atualizar Dados da Marmita"
-              : "Guardar Marmita no Cardápio"}
-          </button>
+          <label className="rotulo" htmlFor="nome">Nome do prato</label>
+          <input id="nome" className="campo" maxLength={100} placeholder="Ex: Escondidinho de patinho" value={form.nome} onChange={campo("nome")} required />
 
-          {idEmEdicao && (
-            <button
-              type="button"
-              onClick={limparFormulario}
-              style={{
-                background: "none",
-                border: "none",
-                color: C.muted,
-                width: "100%",
-                marginTop: 12,
-                cursor: "pointer",
-                fontWeight: "bold",
-              }}
-            >
-              Cancelar Edição
+          <label className="rotulo" htmlFor="desc">Descrição</label>
+          <textarea id="desc" className="campo" rows={3} maxLength={500} placeholder="Ingredientes e detalhes" value={form.descricao} onChange={campo("descricao")} />
+
+          <span className="rotulo">Preços por tamanho (deixe em branco os que não vende)</span>
+          <div className="precos">
+            {TAMANHOS.map((t) => (
+              <label key={t} className="preco-campo">
+                <span>{t}</span>
+                <input
+                  className="campo"
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  step="0.01"
+                  placeholder="R$ 0,00"
+                  value={form.precos[t]}
+                  onChange={(e) => setForm((f) => ({ ...f, precos: { ...f.precos, [t]: e.target.value } }))}
+                />
+              </label>
+            ))}
+          </div>
+
+          <label className="check">
+            <input type="checkbox" checked={form.ativo} onChange={(e) => setForm((f) => ({ ...f, ativo: e.target.checked }))} />
+            Mostrar no cardápio do site
+          </label>
+
+          {mensagem && (
+            <p className={`msg ${mensagem.tipo}`} role={mensagem.tipo === "erro" ? "alert" : "status"}>
+              {mensagem.texto}
+            </p>
+          )}
+
+          <button type="submit" className="btn btn-primary btn-block" disabled={salvando}>
+            {salvando ? "Salvando…" : emEdicao ? "Salvar alterações" : "Cadastrar marmita"}
+          </button>
+          {emEdicao && (
+            <button type="button" className="link-voltar" onClick={limparFormulario}>
+              Cancelar edição
             </button>
           )}
         </form>
 
-        {/* Lista de Pratos com Opção de Editar e Eliminar */}
-        <div style={{ flex: "1 1 400px" }}>
-          {/* O PONTO DE INTERROGAÇÃO AQUI É O NOSSO ESCUDO DE PROTEÇÃO */}
-          <h3 style={{ ...styles.cardName, fontSize: 20, marginBottom: 20 }}>
-            📋 Pratos Ativos ({menu?.length || 0})
-          </h3>
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {!menu || menu.length === 0 ? (
-              <p style={{ color: C.muted }}>Nenhum prato cadastrado.</p>
-            ) : (
-              menu.map((p) => (
-                <div
-                  key={p.id}
-                  style={{
-                    background: "#fff",
-                    padding: "16px 20px",
-                    borderRadius: 16,
-                    boxShadow: "0 2px 10px rgba(0,0,0,0.03)",
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                  }}
-                >
-                  <div>
-                    <strong style={{ color: C.text }}>{p.nome}</strong>
-                    <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+        <section aria-labelledby="titulo-lista">
+          <h2 id="titulo-lista" className="lista-titulo">
+            Cardápio ({menu.length}) {carregando && <small>atualizando…</small>}
+          </h2>
+          {menu.length === 0 && !carregando ? (
+            <p className="vazio-admin">Nenhuma marmita cadastrada ainda.</p>
+          ) : (
+            <ul className="lista">
+              {menu.map((p) => (
+                <li key={p.id} className={`linha ${p.ativo ? "" : "oculto"}`}>
+                  <div className="linha-foto">
+                    {p.foto ? <img src={p.foto} alt="" loading="lazy" /> : <PratoIlustrado />}
+                  </div>
+                  <div className="linha-info">
+                    <strong>{p.nome}</strong>
+                    <div className="etiquetas">
+                      {!p.ativo && <span className="tag oculto-tag">Oculto no site</span>}
                       {p.tamanhos.map((t) => (
-                        <span
-                          key={t.tamanho}
-                          style={{
-                            fontSize: 11,
-                            background: C.creamDark,
-                            padding: "2px 6px",
-                            borderRadius: 4,
-                            color: C.muted,
-                          }}
-                        >
-                          {t.tamanho}: {fmt(t.preco)}
-                        </span>
+                        <span className="tag" key={t.tamanho}>{t.tamanho}: {moeda(t.preco)}</span>
                       ))}
                     </div>
                   </div>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <button
-                      onClick={() => iniciarEdicao(p)}
-                      style={{
-                        background: C.creamDark,
-                        color: C.text,
-                        border: "none",
-                        borderRadius: 8,
-                        padding: "8px 12px",
-                        fontWeight: "bold",
-                        cursor: "pointer",
-                      }}
-                    >
-                      Editar ✏️
+                  <div className="linha-acoes">
+                    <button type="button" className="btn-mini" onClick={() => iniciarEdicao(p)} aria-label={`Editar ${p.nome}`} title="Editar">
+                      <IconLapis size={18} />
                     </button>
-                    <button
-                      onClick={() => handleDeletarPrato(p.id)}
-                      style={{
-                        background: "#fee2e2",
-                        color: "#ef4444",
-                        border: "none",
-                        borderRadius: 8,
-                        padding: "8px 12px",
-                        fontWeight: "bold",
-                        cursor: "pointer",
-                      }}
-                    >
-                      🗑️
+                    <button type="button" className="btn-mini" onClick={() => alternarAtivo(p)} title={p.ativo ? "Ocultar do site" : "Mostrar no site"}>
+                      {p.ativo ? "Ocultar" : "Mostrar"}
+                    </button>
+                    <button type="button" className="btn-mini perigo" onClick={() => excluir(p)} aria-label={`Excluir ${p.nome}`} title="Excluir">
+                      <IconLixeira size={18} />
                     </button>
                   </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
       </div>
     </div>
   );
